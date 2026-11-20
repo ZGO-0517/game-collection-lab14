@@ -61,8 +61,7 @@ pub fn exits(room: u32) -> [u32; 3] {
 }
 
 pub fn is_exit(room: u32, target: u32) -> bool {
-    let [a, b, c] = exits(room);
-    target == a || target == b || target == c
+    contains(&exits(room), target)
 }
 
 pub fn print_warnings(room: u32, pit: u32, bats: u32, wumpus: u32) {

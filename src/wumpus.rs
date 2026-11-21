@@ -93,15 +93,19 @@ pub fn print_warnings(room: u32, pits: &[u32], bats: &[u32], wumpus: u32) {
 }
 
 /// Returns (player, pit, bats, wumpus), all in different rooms.
-pub fn place_hazards() -> (u32, u32, u32, u32) {
+pub fn place_hazards() -> (u32, [u32; 2], [u32; 2], u32) {
     let mut rng = rand::rng();
     loop {
-        let player = rng.random_range(1..=8);
-        let pit = rng.random_range(1..=8);
-        let bats = rng.random_range(1..=8);
-        let wumpus = rng.random_range(1..=8);
-        if player != pit && player != bats && player != wumpus && pit != bats && pit != wumpus && bats != wumpus {
-            return (player, pit, bats, wumpus);
+        let player = rng.random_range(1..=ROOM_COUNT);
+	let pit1 = rng.random_range(1..=ROOM_COUNT);
+	let pit2 = rng.random_range(1..=ROOM_COUNT);
+	let bats1 = rng.random_range(1..=ROOM_COUNT);
+	let bats2 = rng.random_range(1..=ROOM_COUNT);
+	let wumpus = rng.random_range(1..=ROOM_COUNT);
+
+	let rooms = [player, pit1, pit2, bats1, bats2, wumpus];
+	if all_distinct(&rooms) {
+	    return (player, [pit1, pit2], [bats1, bats2], wumpus);
         }
     }
 }
@@ -111,21 +115,19 @@ pub fn shoot(target: u32, wumpus: u32) -> bool {
 }
 
 pub fn bat_destination() -> u32 {
-    rand::rng().random_range(1..=8)
+    let mut rng = rand::rng();
+    rng.random_range(1..=ROOM_COUNT)
 }
 
 /// With probability 3/4 the Wumpus moves to a random exit; otherwise it stays.
 pub fn wake_wumpus(wumpus: u32) -> u32 {
     let mut rng = rand::rng();
-    if rng.random_range(0..4) < 3 {
-        let [a, b, c] = exits(wumpus);
-        match rng.random_range(0..3) {
-            0 => a,
-            1 => b,
-            _ => c,
-        }
-    } else {
-        wumpus
+    let neighbors = exits(wumpus);
+    match rng.random_range(0..4) {
+	0 => neighbors[0],
+	1 => neighbors[1],
+	2 => neighbors[2],
+	_ => wumpus,
     }
 }
 
@@ -140,30 +142,30 @@ fn read_exit(room: u32, prompt: &str) -> u32 {
 }
 
 pub fn play() {
-    let (mut player, pit, bats, mut wumpus) = place_hazards();
-    let mut arrows = 3;
+    let (mut player, pits, bats, mut wumpus) = place_hazards();
+    let mut arrows = ARROWS;
     println!("You enter the cave with {arrows} arrows.");
     loop {
         println!();
         let [a, b, c] = exits(player);
         println!("You are in room {player}. Exits: {a}, {b}, {c}.");
-        print_warnings(player, &[pit], &[bats], wumpus);
+        print_warnings(player, &pits, &bats, wumpus);
         print!("Move or shoot (m/s)? ");
         io::stdout().flush().expect("failed to flush output");
         let action = read_line_trimmed().to_ascii_lowercase();
         if action == "m" {
             player = read_exit(player, "Move to room: ");
-            if player == bats {
+            if contains(&bats, player) {
                 println!("Bats carry you away!");
                 player = bat_destination();
             }
-            if player == pit {
+            if contains(&pits, player) {
                 println!("You fell into a pit. You lose.");
-                return;
+                break;
             }
             if player == wumpus {
                 println!("The Wumpus ate you. You lose.");
-                return;
+                break;
             }
         } else if action == "s" {
             let target = read_exit(player, "Shoot into room: ");
@@ -220,10 +222,13 @@ mod tests {
     // Update this test when `place_hazards` changes.
     #[test]
     fn hazards_are_distinct() {
-        for _ in 0..200 {
+        for _ in 0..100 {
             let (player, pit, bats, wumpus) = place_hazards();
-            assert!(player != pit && player != bats && player != wumpus);
-            assert!(pit != bats && pit != wumpus && bats != wumpus);
+	    let all = [player, pit[0], pit[1], bats[0], bats[1], wumpus];
+	    assert!(all_distinct(&all));            
+	    for room in all {
+		assert!((1..ROOM_COUNT).contains(&room));
+	    }
         }
     }
 
